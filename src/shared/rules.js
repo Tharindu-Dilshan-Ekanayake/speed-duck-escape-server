@@ -15,6 +15,7 @@ import {
   STAGE_COUNT,
   STAGE_WINS,
   TREADMILLS,
+  TUT_DONE,
   WHEEL,
   WORLD2_REBIRTHS,
   boostPrice,
@@ -24,6 +25,7 @@ import {
   packPrice,
   rebirthLevel,
   runWins,
+  stageLevel,
   stageWorld,
   stepMultiplier,
   winMultiplier,
@@ -52,6 +54,10 @@ export function newProfile(name = 'Player') {
     spinMs: 0,
     boostWins: 0,
     boostSpeed: 0,
+    /** Tutorial step for new players (TUT_DONE when finished). */
+    tut: 0,
+    /** Save layout version (2 = World 1 has 15 stages). */
+    sv: 2,
     createdAt: now,
     updatedAt: now,
   }
@@ -61,6 +67,13 @@ export function newProfile(name = 'Player') {
 export function migrate(stored, name) {
   const base = newProfile(name)
   const p = { ...base, ...(stored || {}) }
+  if (stored) {
+    // Saves from before World 1 grew from 10 to 15 stages: World 2 moved up by 5.
+    if (!stored.sv && Number(stored.maxStage) > 10) p.maxStage = Number(stored.maxStage) + 5
+    p.sv = 2
+    // Only brand-new players get the guide; anyone who has already played skips it.
+    if (stored.tut === undefined) p.tut = (stored.totalWins || 0) > 0 || (stored.level || 1) > 1 || (stored.rebirths || 0) > 0 ? TUT_DONE : 0
+  }
   for (const k of ['ducks', 'treads']) if (!Array.isArray(p[k])) p[k] = base[k]
   if (!p.ducks.includes('rubber')) p.ducks.unshift('rubber')
   if (!p.treads.includes('t1')) p.treads.unshift('t1')
@@ -131,6 +144,12 @@ export function canEnterWorld(p, world) {
 }
 
 export const stageAccess = (p, stage) => canEnterWorld(p, stageWorld(stage))
+
+/** The stage gate's force field: you need a high enough level to pass. */
+export function stageLock(p, stage) {
+  const need = stageLevel(stage)
+  return p.level < need ? `Level ${need} required for Stage ${stage}! Train on the treadmills.` : null
+}
 
 /** Called when a pad is claimed - unlocks the next stage for teleports. */
 export function clearStage(p, stage) {

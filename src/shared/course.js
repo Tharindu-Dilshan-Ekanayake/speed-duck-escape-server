@@ -17,10 +17,10 @@ import { DUCKS, STAGE_COUNT, STAGE_NAMES, TREADMILLS, W1_STAGES, stageLevel, sta
 /* ------------------------------------------------------------------ */
 
 export const C = {
-  grass: '#4cc63a',
-  grassDark: '#3aa82e',
-  dirt: '#b5743f',
-  dirtDark: '#975a2f',
+  grass: '#3fcf2c',
+  grassDark: '#2fae22',
+  dirt: '#a8622e',
+  dirtDark: '#8a4f24',
   stone: '#7d8499',
   stoneDark: '#565c72',
   stoneLight: '#a4aabd',
@@ -1118,7 +1118,7 @@ function createLobby(world) {
 
   // Spawn plaza: dark stone quadrants, light stone curbs in a cross, white spawn pad.
   // World 1: warm dirt paths (World 2 keeps its purple stone).
-  const slab = world === 1 ? '#c99a62' : C.purple
+  const slab = world === 1 ? '#cf9a62' : C.purple
   for (const [qx, qz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) box(qx * 6.2, 0.06, 16 + qz * 6.2, 9.2, 0.12, 9.2, slab)
   for (const s of [-1, 1]) {
     box(0, 0.25, 16 + s * 7.1, 2.2, 0.5, 8, C.brick, 'brick')

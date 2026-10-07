@@ -17,13 +17,13 @@ import { DUCKS, STAGE_COUNT, STAGE_NAMES, TREADMILLS, W1_STAGES, stageLevel, sta
 /* ------------------------------------------------------------------ */
 
 export const C = {
-  grass: '#22dd22',
-  grassDark: '#17b417',
-  dirt: '#d9573f',
-  dirtDark: '#b8442f',
-  stone: '#3c4262',
-  stoneDark: '#262a40',
-  stoneLight: '#5a6188',
+  grass: '#4cc63a',
+  grassDark: '#3aa82e',
+  dirt: '#b5743f',
+  dirtDark: '#975a2f',
+  stone: '#7d8499',
+  stoneDark: '#565c72',
+  stoneLight: '#a4aabd',
   brick: '#c6c9d6',
   white: '#f3f6ff',
   water: '#2fe2ff',
@@ -88,8 +88,8 @@ function rng(seed) {
 /* ------------------------------------------------------------------ */
 
 const THEMES = {
-  river: { sky: 'day', cliff: '#b06a32', cliffShade: '#8e5226', cap: '#2fbf3a', canopy: ['#2fae3a', '#46d14f', '#8ad84a'] },
-  canyon: { sky: 'day', cliff: '#e0645a', cliffShade: '#c94f47', cap: C.grass, canopy: ['#ff8fe0', '#39ff3a', '#ff6fd0'] },
+  river: { sky: 'day', cliff: '#a8703f', cliffShade: '#8c5a31', cap: C.grass, canopy: ['#3fb84a', '#5bcf4a', '#2f9e3e'] },
+  canyon: { sky: 'day', cliff: '#a8703f', cliffShade: '#8c5a31', cap: C.grass, canopy: ['#3fb84a', '#5bcf4a', '#2f9e3e'] },
   lava: { sky: 'ember', cliff: '#7c2a1e', cliffShade: '#5e1f17', cap: '#3a2320', canopy: ['#ff7a1a', '#ffb000'] },
   sky: { sky: 'high', cliff: '#ffffff', cliffShade: '#dbe9ff', cap: C.cloud, canopy: ['#ffd6f6', '#bfffc7'] },
   dark: { sky: 'dusk', cliff: '#3b3550', cliffShade: '#2a2540', cap: '#4b4566', canopy: ['#ff3a6a'] },
@@ -1117,7 +1117,8 @@ function createLobby(world) {
   box(0, 20, 47, 108, 60, 2, '#000', 'invisible')
 
   // Spawn plaza: dark stone quadrants, light stone curbs in a cross, white spawn pad.
-  const slab = world === 1 ? C.stone : C.purple
+  // World 1: warm dirt paths (World 2 keeps its purple stone).
+  const slab = world === 1 ? '#c99a62' : C.purple
   for (const [qx, qz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) box(qx * 6.2, 0.06, 16 + qz * 6.2, 9.2, 0.12, 9.2, slab)
   for (const s of [-1, 1]) {
     box(0, 0.25, 16 + s * 7.1, 2.2, 0.5, 8, C.brick, 'brick')

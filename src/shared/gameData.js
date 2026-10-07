@@ -12,7 +12,7 @@ export const ROOM_NAME = 'lobby'
 export const MAX_PLAYERS_PER_LOBBY = 8
 
 /** Set false before launch to hide the developer panel (stage jumper / free wins). */
-export const DEV_TOOLS = true
+export const DEV_TOOLS = false
 
 /* ------------------------------------------------------------------ */
 /* Levels & speed                                                      */

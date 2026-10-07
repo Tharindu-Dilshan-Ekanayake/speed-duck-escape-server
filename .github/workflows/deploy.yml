@@ -1,0 +1,58 @@
+# Builds the game server image, pushes it to GHCR and tells Bloxity Legion to roll it.
+#   dev branch  -> dev channel  (https://speed-duck-escape.dev.host.bloxity.io)
+#   main branch -> prod channel (https://speed-duck-escape.host.bloxity.io)
+# Required repo secret: LEGION_DEPLOY_TOKEN
+name: deploy-server
+
+on:
+  push:
+    branches: [main, dev]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  GAME_ID: speed-duck-escape
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Channel + image name
+        id: meta
+        run: |
+          if [ "${GITHUB_REF_NAME}" = "main" ]; then CH=prod; else CH=dev; fi
+          OWNER=$(echo "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')
+          SHA=${GITHUB_SHA::12}
+          echo "channel=$CH" >> "$GITHUB_OUTPUT"
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+          echo "image=ghcr.io/$OWNER/${GAME_ID}-server:$CH-$SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to GHCR
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Build and push
+        run: |
+          docker build \
+            --label "org.opencontainers.image.source=https://github.com/${GITHUB_REPOSITORY}" \
+            -t "${{ steps.meta.outputs.image }}" .
+          docker push "${{ steps.meta.outputs.image }}"
+
+      - name: Deploy to Legion
+        env:
+          LEGION_DEPLOY_TOKEN: ${{ secrets.LEGION_DEPLOY_TOKEN }}
+        run: |
+          if [ -z "${LEGION_DEPLOY_TOKEN}" ]; then
+            echo "::error::Secret LEGION_DEPLOY_TOKEN is empty. Add it under Settings > Secrets and variables > Actions > the Secrets tab (not Variables)."
+            exit 1
+          fi
+          CODE=$(curl -s -o resp.txt -w '%{http_code}' -X POST "https://legion.bloxity.io/v1/apps/${GAME_ID}/deploy" \
+            -H "Authorization: Bearer ${LEGION_DEPLOY_TOKEN}" \
+            -H 'Content-Type: application/json' \
+            -d "{\"channel\":\"${{ steps.meta.outputs.channel }}\",\"image\":\"${{ steps.meta.outputs.image }}\",\"version\":\"${{ steps.meta.outputs.sha }}\",\"seatCap\":8,\"maxReplicas\":10}")
+          echo "HTTP ${CODE}"; cat resp.txt; echo
+          [ "${CODE}" -lt 300 ]

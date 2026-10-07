@@ -942,6 +942,15 @@ function createLobby(world) {
   L.portal = { x: cx - 26, y: 0, z: 50, ry: 0, to: world === 1 ? 2 : 1 }
   box(-26, 0.25, 50, 12, 0.5, 6, slab)
 
+  // ---- Decorations (visual only) --------------------------------------------
+  L.props.push({ type: 'arch', x: cx, y: 0, z: 4 })
+  for (const sd of [-1, 1]) {
+    for (let z = -2; z > COURSE_Z + 4; z -= 12) L.props.push({ type: 'lamp', x: cx + sd * 5, y: 0, z })
+    for (let z = -4; z > COURSE_Z + 6; z -= 5) L.props.push({ type: 'bush', x: cx + sd * (7.5 + r() * 1.5), y: 0, z: z + r() * 2, s: 0.8 + r() * 0.5, c: Math.floor(r() * 3) })
+  }
+  for (const [x, z] of [[-15, 12], [15, 12], [-15, 32], [15, 32]]) L.props.push({ type: 'lamp', x: cx + x, y: 0, z })
+  L.props.push({ type: 'pond', x: cx + 38, y: 0, z: 38, r: 8 })
+
   // ---- Nature: cliffs ring + trees + flowers --------------------------------
   const ring = []
   for (let x = -70; x <= 70; x += 11) ring.push([x, 74 + r() * 6])

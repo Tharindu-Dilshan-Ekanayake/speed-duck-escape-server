@@ -167,7 +167,8 @@ export class LobbyLogic {
 
   /** Moves a player (server-side teleport). `how`: 'tp' | 'respawn' | 'reject'. */
   setPos(p, pos, how = 'tp', notify = true) {
-    p.pos = { x: pos.x, y: pos.y, z: pos.z, yaw: pos.yaw ?? Math.PI }
+    // Stamped a little in the past so the owner's next (client-clocked) update follows it.
+    p.pos = { x: pos.x, y: pos.y, z: pos.z, yaw: pos.yaw ?? Math.PI, t: this.now() - 300 }
     p.budget = 10
     p.lastPosAt = this.now()
     p.distAcc = 0
@@ -200,7 +201,7 @@ export class LobbyLogic {
 
   onPos(p, m) {
     if (!Array.isArray(m) || m.length < 5) return
-    const [x, y, z, yaw, flags] = m.map(Number)
+    const [x, y, z, yaw, flags, sentAt] = m.map(Number)
     if (![x, y, z, yaw].every(Number.isFinite)) return
     const now = this.now()
     const dt = Math.min(1, Math.max(0, (now - p.lastPosAt) / 1000))
@@ -216,7 +217,9 @@ export class LobbyLogic {
     }
     p.budget -= dist
     const prev = p.pos
-    p.pos = { x, y, z, yaw }
+    // The sender's (server-synced) clock, so others can replay the motion evenly spaced.
+    const t = Number.isFinite(sentAt) && Math.abs(sentAt - now) < 3000 ? sentAt : now
+    p.pos = { x, y, z, yaw, t }
     p.flags = flags | 0
 
     if ((p.flags & FLAG.GROUNDED) && !(p.flags & FLAG.TREAD) && dist > 0.01) {
@@ -295,7 +298,7 @@ export class LobbyLogic {
 
     if (this.players.size > 1) {
       const snap = []
-      for (const p of this.players.values()) snap.push([p.sid, round2(p.pos.x), round2(p.pos.y), round2(p.pos.z), round2(p.pos.yaw), p.flags])
+      for (const p of this.players.values()) snap.push([p.sid, round2(p.pos.x), round2(p.pos.y), round2(p.pos.z), round2(p.pos.yaw), p.flags, p.pos.t || now])
       this.broadcast('snap', snap)
     }
 

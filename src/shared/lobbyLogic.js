@@ -467,7 +467,12 @@ export class LobbyLogic {
     const pr = p.profile
     switch (m.action) {
       case 'tp': {
-        const n = Math.max(1, Math.min(STAGE_COUNT, Math.floor(Number(m.stage) || 1)))
+        const n = Math.max(0, Math.min(STAGE_COUNT, Math.floor(Number(m.stage) || 0)))
+        if (n === 0) {
+          p.racing = null
+          this.setPos(p, lobbySpawn(p.region.world))
+          break
+        }
         if (n > pr.maxStage) pr.maxStage = n
         if (n > 10 && pr.rebirths < 3) pr.rebirths = 3
         p.region = regionAt(stageSpawn(n).x, stageSpawn(n).z)

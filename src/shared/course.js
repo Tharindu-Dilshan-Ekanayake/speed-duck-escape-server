@@ -1194,7 +1194,7 @@ function createLobby(world) {
   })
   // ---- World portal --------------------------------------------------------
   L.portal = { x: cx - 24, y: 0, z: 28, ry: Math.atan2(24, -12), to: world === 1 ? 2 : 1 }
-  box(-24, 0.12, 28, 11, 0.24, 11, slab)
+  box(-24, 0.1, 28, 11, 0.2, 11, slab) // top 0.2: below the portal's own base (0.32), never coplanar
   box(-13, 0.055, 22, 23, 0.11, 4.5, slab, 'stud', 'deco')
 
   // ---- Decorations (visual only) --------------------------------------------

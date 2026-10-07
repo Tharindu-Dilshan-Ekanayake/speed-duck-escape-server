@@ -1,5 +1,5 @@
 /**
- * World layout: two lobbies and 20 obstacle stages, generated deterministically.
+ * World layout: two lobbies and 25 obstacle stages (15 + 10), generated deterministically.
  *
  * CANONICAL COPY (the server keeps an identical copy for pad / stage validation).
  * Pure data: the client turns it into meshes + collision, the server only reads
@@ -10,7 +10,7 @@
  * the stage entrance) and convert to world space.
  */
 
-import { DUCKS, STAGE_NAMES, TREADMILLS } from './gameData.js'
+import { DUCKS, STAGE_COUNT, STAGE_NAMES, TREADMILLS, W1_STAGES, stageLevel, stageWorld, worldFirst, worldLast } from './gameData.js'
 
 /* ------------------------------------------------------------------ */
 /* Palette                                                             */
@@ -52,7 +52,15 @@ export const C = {
 }
 
 export const WORLD_X = { 1: 0, 2: 3000 }
-/** z of the wall that separates each lobby from its Stage 1 / Stage 11 entrance. */
+/** Stage gate walls: pale castle stone with coloured banners. */
+const WALL = {
+  stone: '#b9bfd2',
+  trim: '#8a91a8',
+  stone2: '#a99be0',
+  trim2: '#7a68c8',
+  banners: ['#e8384f', '#2f8bff', '#ffc21a', '#2fcf6a'],
+}
+/** z of the wall that separates each lobby from its Stage 1 / Stage 16 entrance. */
 export const COURSE_Z = -30
 /**
  * Every stage is built in a narrower "builder" frame and stretched sideways by this
@@ -174,29 +182,60 @@ function createStage(n, world, cx, z0, len, opt = {}) {
   a.W = half * 2
 
   /**
-   * Stage gate: a tall open archway as wide as the course, with the "Stage N" sign on
-   * top. Invisible walls either side stop players walking around it, but nothing blocks
-   * the view - you can see into the stage from the lobby / previous stage.
+   * Stage gate: a tall castle wall of pale stone across the course, with towers, banners
+   * and battlements, and one big archway to run through. Above the arch: "Stage N" and
+   * its name. Stages that need a higher level get a glowing force field in the arch
+   * that only lets you through once you are strong enough.
    */
   a.entrance = (color = C.stoneDark, floorColor = C.stone, top = 0) => {
+    void color
     void floorColor
-    const ext = half + 16
-    for (const s of [-1, 1]) a.blk(s * (half + 0.2 + ext / 2), ext, top + 40, 50, 0, 3, '#000000', 'invisible')
-    const px = half + 0.75
-    const trim = C.gold
+    const gw = Math.min(half - 1.5, 6.5) // half-width of the opening (builder units)
+    // The first gate of a world doubles as the lobby's back wall, so it spans the lobby.
+    const ext = n === worldFirst(world) ? 58 / LAT : half + 18
+    const H = 15
+    const stone = world === 1 ? WALL.stone : WALL.stone2
+    const trim = world === 1 ? WALL.trim : WALL.trim2
+    const x0 = gw + 1.6
     for (const s of [-1, 1]) {
-      // Pillars reach well below the floor so they never float over water / void.
-      a.blk(s * px, 1.5, top + 10, 20, 0.2, 2.2, color, 'smooth')
-      a.blk(s * px, 2.0, top + 0.7, 0.7, 0, 2.6, trim, 'smooth', 'deco')
-      a.blk(s * px, 2.0, top + 10.4, 0.5, 0, 2.6, trim, 'smooth', 'deco')
-      a.blk(s * (px - 0.55), 0.16, top + 9.6, 8.6, -0.06, 0.16, C.neonCyan, 'neon', 'deco')
+      const mid = s * (x0 + ext) / 2
+      // Wall body (reaches far below the floor so it never floats), plinth and cap.
+      a.blk(mid, ext - x0, top + H, H + 14, 0.4, 2.6, stone, 'brick')
+      a.blk(mid, ext - x0 + 0.2, top + 1.3, 1.3, 0.15, 3.1, trim, 'smooth', 'deco')
+      a.blk(mid, ext - x0 + 0.4, top + H + 0.5, 0.5, 0.15, 3.1, trim, 'smooth', 'deco')
+      // Battlements.
+      for (let x = x0 + 1.2; x < ext - 0.6; x += 3) a.blk(s * x, 1.4, top + H + 1.9, 1.4, 0.55, 2.3, stone, 'brick', 'deco')
+      // Pilasters with hanging banners between them.
+      for (let x = x0 + 7; x < ext - 2; x += 9) {
+        a.blk(s * x, 1.4, top + H, H, 0.1, 3.3, trim, 'smooth', 'deco')
+        const bx = s * (x + 4.5)
+        if (Math.abs(bx) < ext - 2) {
+          a.blk(bx, 2.4, top + H - 1.4, 6, 0.12, 0.14, WALL.banners[(Math.round(x) + n) % WALL.banners.length], 'smooth', 'deco')
+          a.blk(bx, 2.7, top + H - 1.2, 0.3, 0.05, 0.3, C.gold, 'smooth', 'deco')
+        }
+      }
+      // Gate towers.
+      a.blk(s * (gw + 0.9), 3, top + H + 3.5, H + 17.5, 0, 3.4, trim, 'brick')
+      for (const dx of [-0.95, 0.95]) {
+        for (const du of [0.2, 2.6]) a.blk(s * (gw + 0.9) + dx, 0.9, top + H + 4.6, 1.1, du, 0.6, trim, 'brick', 'deco')
+      }
+      a.blk(s * (gw + 0.9), 3.4, top + 0.9, 0.9, -0.2, 3.8, C.gold, 'smooth', 'deco')
+      // Past the wall's end an invisible wall stops anyone walking round it.
+      a.blk(s * (ext + 15), 30, top + 40, 60, 0, 3, '#000000', 'invisible')
     }
-    // Lintel, a gold trim line and a glowing underside.
-    a.blk(0, px * 2 + 2.6, top + 12.4, 2, 0.2, 2.2, color, 'smooth', 'deco')
-    a.blk(0, px * 2 + 2.9, top + 12.75, 0.35, 0, 2.6, trim, 'smooth', 'deco')
-    a.blk(0, px * 2 - 1.5, top + 10.4, 0.14, 0.8, 0.6, C.neonCyan, 'neon', 'deco')
-    a.sign(`Stage ${n}`, 0, top + 15.6, 0.1, 4.2, 'stage')
-    a.sign(STAGE_NAMES[n], 0, top + 11.4, -0.05, 1.35, 'stageSub')
+    // The arch over the opening, with a gold trim and a glowing underside.
+    a.blk(0, gw * 2 + 0.4, top + H, 4, 0.4, 2.6, stone, 'brick')
+    a.blk(0, gw * 2 + 0.4, top + H - 4 - 0.2, 0.4, 0.2, 3.0, C.gold, 'smooth', 'deco')
+    a.blk(0, gw * 2 - 1, top + H - 4.6, 0.12, 1.2, 0.5, C.neonCyan, 'neon', 'deco')
+    a.sign(`Stage ${n}`, 0, top + H + 5.2, 0.2, 3.6, 'stage')
+    a.sign(STAGE_NAMES[n], 0, top + H - 2, 0.1, 1.25, 'stageSub')
+    const req = stageLevel(n)
+    if (req > 1) {
+      a.sign(`LEVEL ${req} REQUIRED`, 0, top + 9.6, -0.1, 0.85, 'warn')
+      a.blk(0, gw * 2, top + H - 4, H - 4, 1.3, 0.3, '#7fe8ff', 'invisible', 'gate', { req })
+      S.props.push({ type: 'forcefield', x: X(0), y: top, z: Z(1.45), w: gw * 2 * LAT, h: H - 4, req })
+    }
+    S.gate = { x: X(0), z: Z(0), w: gw * 2 * LAT, req }
     S.spawn = { x: X(0), y: top + 0.1, z: Z(7.5), yaw: Math.PI }
   }
 
@@ -288,7 +327,7 @@ function createStage(n, world, cx, z0, len, opt = {}) {
 }
 
 /* ------------------------------------------------------------------ */
-/* The 20 stages                                                       */
+/* The 25 stages                                                       */
 /* ------------------------------------------------------------------ */
 
 const STAGE_SPECS = {
@@ -303,17 +342,23 @@ const STAGE_SPECS = {
   8: { len: 150, half: 14, theme: 'sky', killY: -22, build: stage8 },
   9: { len: 160, half: 14, theme: 'canyon', killY: -10, build: stage9 },
   10: { len: 170, half: 12, theme: 'river', killY: -1.35, build: stage10 },
+  // World 1 finale stages (harder, behind level gates).
+  11: { len: 150, half: 15, theme: 'river', killY: -1.6, build: stage11 },
+  12: { len: 150, half: 13, theme: 'canyon', killY: -10, build: stage12 },
+  13: { len: 160, half: 14, theme: 'canyon', killY: -10, build: stage13 },
+  14: { len: 160, half: 14, theme: 'lava', killY: -1.2, build: stage14 },
+  15: { len: 210, half: 16, theme: 'river', killY: -1.6, build: stage15 },
   // ======================= WORLD 2 =======================
-  11: { len: 180, half: 15, theme: 'crystal', killY: -14, build: stage11 },
-  12: { len: 190, half: 11, theme: 'factory', killY: -14, build: stage12 },
-  13: { len: 190, half: 15, theme: 'temple', killY: -14, build: stage13 },
-  14: { len: 200, half: 11, theme: 'neon', indoor: true, killY: -10, build: stage14 },
-  15: { len: 200, half: 14, theme: 'factory', killY: -5.4, build: stage15 },
-  16: { len: 210, half: 16, theme: 'volcano', killY: -10, build: stage16 },
-  17: { len: 210, half: 14, theme: 'sky', killY: -18, build: stage17 },
-  18: { len: 220, half: 15, theme: 'crystal', killY: -16, build: stage18 },
-  19: { len: 240, half: 14, theme: 'volcano', killY: -2.6, build: stage19 },
-  20: { len: 260, half: 16, theme: 'gold', killY: -14, build: stage20 },
+  16: { len: 180, half: 15, theme: 'crystal', killY: -14, build: stage16 },
+  17: { len: 190, half: 11, theme: 'factory', killY: -14, build: stage17 },
+  18: { len: 190, half: 15, theme: 'temple', killY: -14, build: stage18 },
+  19: { len: 200, half: 11, theme: 'neon', indoor: true, killY: -10, build: stage19 },
+  20: { len: 200, half: 14, theme: 'factory', killY: -5.4, build: stage20 },
+  21: { len: 210, half: 16, theme: 'volcano', killY: -10, build: stage21 },
+  22: { len: 210, half: 14, theme: 'sky', killY: -18, build: stage22 },
+  23: { len: 220, half: 15, theme: 'crystal', killY: -16, build: stage23 },
+  24: { len: 240, half: 14, theme: 'volcano', killY: -2.6, build: stage24 },
+  25: { len: 260, half: 16, theme: 'gold', killY: -14, build: stage25 },
 }
 
 /* ---- Stage 1: River Bridges - three long stone bridges over a river canyon ---- */
@@ -586,7 +631,6 @@ function stage9(a) {
 
 /* ---- Stage 10: Flooded Bridges ---- */
 function stage10(a) {
-  const { S } = a
   a.island(0, a.W, 0, 12, 0, 6)
   a.entrance(C.stoneDark, C.grass)
   a.bounds()
@@ -624,12 +668,161 @@ function stage10(a) {
   for (let i = 0; i < 6; i += 1) collapse(i % 2 ? 0.6 : -0.6, 5.6, 136 + i * 3, 2.88, 0.65, i)
   a.island(0, a.W, 154, 16, 0, 6)
   a.endRoom(C.grass)
-  a.prop('worldGate', 0, 0, S.len - 3, { world: 2 })
-  a.prop('teleporter', 4, 0, S.len - 9, { to: 'lobby' })
 }
 
-/* ---- Stage 11: Crystal Caves ---- */
+/* ---- Stage 11: Log Rollers - spinning logs on a wide bridge, stepping stones, sliding planks ---- */
 function stage11(a) {
+  const { r } = a
+  a.island(0, a.W, 0, 12)
+  a.entrance(C.stoneDark, C.grass)
+  a.bounds()
+  a.waterPlane()
+  a.cliffs({ gap: 3, height: 1.3 })
+  a.sign('Jump the rolling logs!', 0, 3.6, 10, 0.9, 'warn')
+  // A wide stone bridge swept by three spinning logs.
+  a.blk(0, 10, 0.3, 1.2, 12, 46, '#9aa0b4')
+  for (const x of [-4.8, 4.8]) a.blk(x, 0.4, 0.42, 0.12, 12, 46, '#7c8296', 'stud', 'deco')
+  ;[[22, 1.5, 0], [34, -1.8, 0.3], [46, 2.1, 0.6]].forEach(([u, spd, ph]) => a.sweeper(0, u, 0.75, 6.6, spd, ph, C.wood))
+  a.island(0, 24, 58, 10)
+  // Stepping stones across the river.
+  let u = 70
+  for (let i = 0; i < 7; i += 1) {
+    a.cyl((i % 2 ? 1 : -1) * (0.8 + r() * 0.8), u, 0, 2.3, 8, C.stone, 'stud', 'solid', { island: true })
+    u += 3.9
+  }
+  a.island(0, 24, 100, 9)
+  // Planks sliding side to side.
+  a.sign('Ride the sliding planks!', 0, 3.6, 104, 0.9, 'label')
+  for (let i = 0; i < 5; i += 1) a.mover(0, 4.4, 0.1, 0.5, 110 + i * 4.4, 3.6, i % 2 ? C.woodLight : C.wood, 0, 4.2, 3.4 + i * 0.25, i * 0.21)
+  a.island(0, a.W, 132, 18)
+  a.endRoom(C.grass, 0, 14)
+}
+
+/* ---- Stage 12: Axe Causeway - giant axes swing across a stone causeway ---- */
+function stage12(a) {
+  const { S, r } = a
+  a.slab(0, a.W, 0, 10, 0, C.stone, 3)
+  a.entrance(C.stoneDark, C.stone)
+  a.bounds()
+  a.cliffs({ gap: 6, base: -12, height: 1.4 })
+  S.planes.push({ kind: 'ground', y: -26, x: a.X(0), z: a.Z(S.len / 2), w: 140, d: S.len + 6, c: '#1fa83a' })
+  // Causeway with a glowing centre line.
+  a.slab(0, 9, 10, 40, 0, C.stoneLight, 3)
+  a.blk(0, 0.4, 0.03, 0.05, 10, 40, C.neonYellow, 'neon', 'deco')
+  a.sign('Time your run between the axes!', 0, 4, 9, 0.9, 'warn')
+  ;[18, 27, 36, 45].forEach((u, i) => a.pendulum(0, u, 9, 7.4, 1.0, 2.1 + i * 0.15, r()))
+  // Sinking stones over the drop.
+  a.slab(0, 12, 50, 6, 0, C.stone, 3)
+  for (let i = 0; i < 6; i += 1) a.sink((i % 2 ? 1 : -1) * 2.2, 4.2, 58 + i * 4.2, 3.6, 0, i % 2 ? C.stoneLight : C.stone)
+  a.slab(0, 12, 84, 8, 0, C.stone, 3)
+  // Narrow causeway: faster axes, then on/off tiles.
+  a.slab(0, 7, 92, 26, 0, C.stoneLight, 3)
+  ;[98, 106, 114].forEach((u) => a.pendulum(0, u, 9, 7.4, 1.1, 1.7 + r() * 0.3, r()))
+  for (let row = 0; row < 4; row += 1) {
+    for (const x of [-2.6, 0, 2.6]) a.blink(x, 2.5, 0, 1, 118 + row * 3, 2.8, row % 2 ? '#ffd01a' : '#ff8a1a', 3, 0, 0.62, ((row + Math.round(x / 2.6) + 2) % 2) * 0.5)
+  }
+  a.slab(0, a.W, 130, 20, 0, C.stone, 3)
+  a.endRoom(C.stone)
+}
+
+/* ---- Stage 13: Crumbling Cliffs - collapsing tiles and rolling boulders ---- */
+function stage13(a) {
+  const { S, Z } = a
+  a.island(0, a.W, 0, 10, 0, 30)
+  a.entrance(C.stoneDark, C.grass)
+  a.bounds()
+  a.cliffs({ gap: 4, base: -14, height: 1.5 })
+  S.planes.push({ kind: 'ground', y: -30, x: a.X(0), z: a.Z(S.len / 2), w: 140, d: S.len + 6, c: '#1fa83a' })
+  a.sign("Don't stop - the cliff is crumbling!", 0, 3.8, 9, 0.9, 'warn')
+  // A field of crumbling tiles.
+  for (let row = 0; row < 8; row += 1) {
+    for (let col = -2; col <= 2; col += 1) {
+      a.sink(col * 4.6, 4.2, 12 + row * 4.4, 4, 0, (row + col + 4) % 2 ? C.dirt : C.dirtDark, { delay: 0.55, depth: 30, back: 3 })
+    }
+  }
+  a.island(0, a.W, 48, 8, 0, 30)
+  // Boulder alley.
+  a.blk(0, a.W, 0, 2, 56, 46, C.grass)
+  for (const x of [-9, -3, 3, 9]) a.blk(x, 3.4, 0.03, 0.05, 56, 46, C.sand, 'smooth', 'deco')
+  ;[[-9, 6.5, 0], [-3, 5.6, 0.35], [3, 7.2, 0.7], [9, 6.0, 0.15]].forEach(([x, per, ph]) => {
+    for (const k of [0, 0.5]) a.dyn('boulder', { x: a.X(x), r: 1.6, zA: Z(100), zB: Z(58), per, ph: (ph + k) % 1, floor: 0 })
+  })
+  // Narrow crumbling ledges to the finish.
+  a.island(0, a.W, 102, 6, 0, 30)
+  for (let i = 0; i < 9; i += 1) a.sink(i % 2 ? 2.4 : -2.4, 5, 108 + i * 3.6, 3.2, 0, i % 2 ? C.dirt : C.dirtDark, { delay: 0.4, depth: 30, back: 3 })
+  a.island(0, a.W, 141, 19, 0, 30)
+  a.endRoom(C.grass)
+}
+
+/* ---- Stage 14: Spinning Lava Wheels - turntables and fire arms over lava ---- */
+function stage14(a) {
+  const { r } = a
+  a.slab(0, a.W, 0, 10, 0, C.basalt, 6)
+  a.entrance('#2b2028', C.basalt)
+  a.bounds()
+  a.waterPlane(-1.6, C.lava, 'lava')
+  a.cliffs({ gap: 5, base: -3, height: 0.9, trees: false })
+  a.sign('Ride the wheels - mind the fire!', 0, 3.8, 9, 0.9, 'warn')
+  let u = 10
+  let i = 0
+  while (u < 128) {
+    const rad = 4.4 + r() * 1.4
+    u += rad + 2.2
+    const x = (r() - 0.5) * 7
+    const spd = (i % 2 ? -1 : 1) * (0.8 + r() * 0.6)
+    a.dyn('disk', { x: a.X(x), z: a.Z(u), top: 0, r: rad, h: 1.2, spd, c: i % 2 ? '#ff8a1a' : '#5a4650' })
+    if (i % 2 === 1) a.sweeper(x, u, 0.65, rad - 0.4, spd * 2.4, 0, C.lava, { kill: true, fire: true })
+    u += rad
+    // A small basalt step between some wheels.
+    if (i % 3 === 2) {
+      a.slab(x * 0.5, 4, u + 0.6, 2.4, 0, C.basalt, 6)
+      u += 3
+    }
+    i += 1
+  }
+  a.slab(0, a.W, u + 2.2, 160 - u - 2.2, 0, C.basalt, 6)
+  a.endRoom(C.basalt)
+  for (const [x, uu] of [[-15, 30], [15, 70], [-15, 110]]) a.prop('firePillar', x, -1.6, uu)
+}
+
+/* ---- Stage 15: Great Duck Escape - World 1 finale: outrun a huge tsunami ---- */
+function stage15(a) {
+  const { S } = a
+  a.island(0, a.W, 0, 14)
+  a.entrance(C.stoneDark, C.grass)
+  a.bounds(60)
+  a.waterPlane()
+  a.cliffs({ gap: 3, height: 1.6 })
+  a.sign('THE FINAL ESCAPE - RUN FOR THE HILLS!', 0, 4, 12, 1.1, 'warn')
+  // Long gentle climb with logs to hop, so speed matters more than skill.
+  for (let i = 0; i < 12; i += 1) {
+    const top = 0.35 * (i + 1)
+    a.blk(0, a.W - 6, top, 0.35, 14 + i * 3, 3, C.grass)
+    a.blk(0, a.W - 6.2, top - 0.35, top + 9.6, 14 + i * 3, 3, C.dirt)
+  }
+  a.island(0, a.W - 4, 50, 20, 4.2, 14)
+  for (const u of [56, 64]) a.blk(0, a.W - 8, 5.0, 0.8, u, 1, C.wood)
+  // A wide bridge with spinning logs.
+  a.blk(0, 12, 4.2, 1.2, 70, 30, '#9aa0b4')
+  a.sweeper(0, 79, 4.95, 7.4, 1.9, 0, C.wood)
+  a.sweeper(0, 91, 4.95, 7.4, -2.2, 0.4, C.wood)
+  a.island(0, a.W - 4, 100, 14, 4.2, 14)
+  // Bobbing stones, then the final stairs up to safety.
+  for (let i = 0; i < 4; i += 1) a.mover(i % 2 ? 3 : -3, 8, 3.6, 1, 116 + i * 6, 5, i % 2 ? C.stoneLight : C.stone, 1, 1.2, 3.2, i * 0.25)
+  a.island(0, a.W - 4, 140, 14, 4.2, 14)
+  for (let i = 0; i < 10; i += 1) {
+    const top = 4.2 + 0.5 * (i + 1)
+    a.blk(0, a.W - 6, top, 0.5, 154 + i * 2, 2, C.grass)
+    a.blk(0, a.W - 6.2, top - 0.5, top + 9.5, 154 + i * 2, 2, C.dirt)
+  }
+  a.island(0, a.W, 174, 36, 9.2, 20)
+  a.endRoom(C.grass, 9.2, 16)
+  S.wave = { triggerU: 22, startU: 6, delay: 1.2, speed: 9.2, stopU: 172, height: 24, color: '#3fe8ff' }
+  a.prop('worldGate', 0, 9.2, S.len - 3, { world: 2 })
+}
+
+/* ---- Stage 16: Crystal Caves ---- */
+function stage16(a) {
   const { S, r } = a
   a.slab(0, a.W, 0, 9, 0, C.purple, 4)
   a.entrance('#241a45', C.purple)
@@ -650,8 +843,8 @@ function stage11(a) {
   for (let k = 0; k < 18; k += 1) a.prop('crystals', (r() < 0.5 ? -1 : 1) * (a.half + 2 + r() * 6), -2 + r() * 4, r() * S.len, { s: 1 + r() * 2 })
 }
 
-/* ---- Stage 12: Conveyor Chaos ---- */
-function stage12(a) {
+/* ---- Stage 17: Conveyor Chaos ---- */
+function stage17(a) {
   const { S } = a
   a.slab(0, 22, 0, 8, 0, C.metal, 4)
   a.entrance('#3a3f52', C.metal)
@@ -682,8 +875,8 @@ function stage12(a) {
   a.endRoom(C.metal)
 }
 
-/* ---- Stage 13: Pendulum Hall ---- */
-function stage13(a) {
+/* ---- Stage 18: Pendulum Hall ---- */
+function stage18(a) {
   const { r } = a
   const st = '#b08a4a'
   a.slab(0, a.W, 0, 8, 0, st, 4)
@@ -709,8 +902,8 @@ function stage13(a) {
   for (const u of [10, 60, 118, 174]) for (const s of [-1, 1]) a.prop('column', s * 9, 0, u + 2, { h: 14 })
 }
 
-/* ---- Stage 14: Laser Grid ---- */
-function stage14(a) {
+/* ---- Stage 19: Laser Grid ---- */
+function stage19(a) {
   const { S } = a
   const fl = '#141826'
   a.entrance('#0e1120', fl)
@@ -739,8 +932,8 @@ function stage14(a) {
   a.endRoom(fl)
 }
 
-/* ---- Stage 15: Piston Peaks ---- */
-function stage15(a) {
+/* ---- Stage 20: Piston Peaks ---- */
+function stage20(a) {
   a.slab(0, a.W, 0, 8, 0, C.metal, 4)
   a.entrance('#3a3f52', C.metal)
   a.bounds()
@@ -759,8 +952,8 @@ function stage15(a) {
   a.endRoom(C.metal)
 }
 
-/* ---- Stage 16: Meteor Shower ---- */
-function stage16(a) {
+/* ---- Stage 21: Meteor Shower ---- */
+function stage21(a) {
   const { S, r, Z } = a
   a.blk(0, a.W, 0, 2, 0, S.len, C.basalt)
   a.entrance('#2a1a18', C.basalt)
@@ -779,8 +972,8 @@ function stage16(a) {
   a.endRoom(C.basalt)
 }
 
-/* ---- Stage 17: Wind Tunnel ---- */
-function stage17(a) {
+/* ---- Stage 22: Wind Tunnel ---- */
+function stage22(a) {
   const { S } = a
   const cl = '#e8f0ff'
   a.slab(0, a.W, 0, 8, 0, cl, 2)
@@ -807,8 +1000,8 @@ function stage17(a) {
   a.endRoom(cl)
 }
 
-/* ---- Stage 18: Turntables ---- */
-function stage18(a) {
+/* ---- Stage 23: Turntables ---- */
+function stage23(a) {
   const { S, r } = a
   a.slab(0, a.W, 0, 9, 0, C.purple, 4)
   a.entrance('#241a45', C.purple)
@@ -831,8 +1024,8 @@ function stage18(a) {
   a.endRoom(C.purple)
 }
 
-/* ---- Stage 19: Lava Rising ---- */
-function stage19(a) {
+/* ---- Stage 24: Lava Rising ---- */
+function stage24(a) {
   const { S } = a
   a.slab(0, a.W, 0, 10, 0, C.basalt, 6)
   a.entrance('#2a1a18', C.basalt)
@@ -852,8 +1045,8 @@ function stage19(a) {
   S.rise = { triggerU: 12, y0: -3, speed: 1.3, delay: 2.5, maxY: 34, stopU: 188, color: C.lava }
 }
 
-/* ---- Stage 20: Golden Temple ---- */
-function stage20(a) {
+/* ---- Stage 25: Golden Temple ---- */
+function stage25(a) {
   const { S, r } = a
   const g = C.gold
   a.slab(0, a.W, 0, 9, 0, g, 4)
@@ -918,15 +1111,7 @@ function createLobby(world) {
   // Baseplate (ends exactly where Stage 1 begins) over an earthy cliff body.
   box(0, -1, 9, 108, 2, 78, ground)
   box(0, -6.9, 9.2, 107.6, 10, 77.6, world === 1 ? C.dirt : '#5a3da8', 'stud', 'deco')
-  // The back edge: an invisible wall (the stage gate sits in the middle) behind a low
-  // brick fence, so the lobby stays open and you can see the river course beyond.
-  const wallC = world === 1 ? C.brick : '#8f7bff'
-  for (const s of [-1, 1]) {
-    box(s * 39, 20, COURSE_Z - 1.5, 30, 40, 3, '#000', 'invisible')
-    box(s * 39.2, 0.8, COURSE_Z + 0.5, 29.6, 1.6, 1, wallC, 'brick')
-    box(s * 39.2, 1.75, COURSE_Z + 0.5, 30, 0.3, 1.4, world === 1 ? C.stoneLight : C.purpleLight, 'smooth', 'deco')
-    for (let x = 25; x <= 53; x += 4) box(s * x, 1.2, COURSE_Z + 0.5, 1.3, 2.4, 1.3, world === 1 ? C.stoneLight : C.purpleLight, 'smooth', 'deco')
-  }
+  // The back edge is Stage 1's gate wall (see a.entrance), which spans the whole lobby.
   // Boundaries.
   for (const s of [-1, 1]) box(s * 53, 20, 8, 2, 60, 80, '#000', 'invisible')
   box(0, 20, 47, 108, 60, 2, '#000', 'invisible')
@@ -969,11 +1154,11 @@ function createLobby(world) {
 
   // ---- Signboards on posts above the back fence -----------------------------
   for (const [x, text] of [[-33, 'Ducks give more Speed every Step!'], [31, 'Treadmills = free Steps!']]) {
-    box(x, 8.6, COURSE_Z - 0.6, 22, 3.2, 0.4, world === 1 ? C.wood : '#3a2d63', 'smooth', 'deco')
-    box(x, 10.35, COURSE_Z - 0.6, 22.6, 0.3, 0.6, C.gold, 'smooth', 'deco')
-    box(x, 6.85, COURSE_Z - 0.6, 22.6, 0.3, 0.6, C.gold, 'smooth', 'deco')
-    for (const sx of [-9, 9]) box(x + sx, 3.5, COURSE_Z - 0.6, 0.5, 7, 0.5, world === 1 ? C.woodLight : C.purpleLight, 'smooth', 'deco')
-    L.signs.push({ text, x: cx + x, y: 8.6, z: COURSE_Z - 0.6 + 0.45, ry: 0, size: 1.5, kind: 'stageSub' })
+    box(x, 8.6, COURSE_Z + 0.3, 22, 3.2, 0.4, world === 1 ? C.wood : '#3a2d63', 'smooth', 'deco')
+    box(x, 10.35, COURSE_Z + 0.3, 22.6, 0.3, 0.6, C.gold, 'smooth', 'deco')
+    box(x, 6.85, COURSE_Z + 0.3, 22.6, 0.3, 0.6, C.gold, 'smooth', 'deco')
+    for (const sx of [-9, 9]) box(x + sx, 3.5, COURSE_Z + 0.3, 0.5, 7, 0.5, world === 1 ? C.woodLight : C.purpleLight, 'smooth', 'deco')
+    L.signs.push({ text, x: cx + x, y: 8.6, z: COURSE_Z + 0.3 + 0.45, ry: 0, size: 1.5, kind: 'stageSub' })
   }
 
   // ---- Duck pedestals ------------------------------------------------------
@@ -1058,10 +1243,10 @@ export const LOBBIES = { 1: createLobby(1), 2: createLobby(2) }
 export const STAGES = [null]
 {
   let z = COURSE_Z
-  for (let n = 1; n <= 20; n += 1) {
-    if (n === 11) z = COURSE_Z
+  for (let n = 1; n <= STAGE_COUNT; n += 1) {
+    if (n === W1_STAGES + 1) z = COURSE_Z
     const spec = STAGE_SPECS[n]
-    const world = n > 10 ? 2 : 1
+    const world = stageWorld(n)
     const a = createStage(n, world, WORLD_X[world], z, spec.len, spec)
     spec.build(a)
     STAGES.push(a.S)
@@ -1079,12 +1264,13 @@ export const worldAtX = (x) => (Math.abs(x - WORLD_X[2]) < 1000 ? 2 : 1)
 export function regionAt(x, z) {
   const world = worldAtX(x)
   if (z > COURSE_Z) return { world, stage: 0 }
-  const first = world === 1 ? 1 : 11
-  for (let n = first; n < first + 10; n += 1) {
+  const first = worldFirst(world)
+  const last = worldLast(world)
+  for (let n = first; n <= last; n += 1) {
     const s = STAGES[n]
     if (z <= s.z0 && z > s.z1) return { world, stage: n }
   }
-  return { world, stage: first + 9 }
+  return { world, stage: last }
 }
 
 export const stageSpawn = (n) => STAGES[n].spawn

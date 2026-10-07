@@ -19,9 +19,13 @@ import {
   STAGE_COUNT,
   STEP_DISTANCE,
   TREADMILL_STEPS,
+  TUT_DONE,
+  WORLD2_REBIRTHS,
   speedStat,
+  stageWorld,
   treadById,
   velocityFor,
+  worldFirst,
   xpForLevels,
 } from './gameData.js'
 import { lobbySpawn, minStageTime, onPad, regionAt, stageSpawn, treadAt } from './course.js'
@@ -42,6 +46,7 @@ import {
   raceBonus,
   spinWheel,
   stageAccess,
+  stageLock,
   tickSpins,
   totalLevel,
   xpPerStep,
@@ -179,7 +184,7 @@ export class LobbyLogic {
       p.run = null
       return
     }
-    const first = reg.world === 2 ? 11 : 1
+    const first = worldFirst(reg.world)
     const forward = prev === reg.stage - 1 || (prev === 0 && reg.stage === first)
     if (how === 'tp' || how === 'respawn' || forward) {
       p.run = { stage: reg.stage, at: this.now(), claimed: false }
@@ -210,6 +215,7 @@ export class LobbyLogic {
       return
     }
     p.budget -= dist
+    const prev = p.pos
     p.pos = { x, y, z, yaw }
     p.flags = flags | 0
 
@@ -228,6 +234,14 @@ export class LobbyLogic {
         if (denied) {
           this.toast(p, denied)
           this.setPos(p, lobbySpawn(1))
+          return
+        }
+        // Walking forward through a gate you are too low-level for: bounce back.
+        const locked = reg.stage > p.region.stage ? stageLock(p.profile, reg.stage) : null
+        if (locked) {
+          this.toast(p, locked)
+          p.pos = prev
+          this.setPos(p, prev, 'reject')
           return
         }
       }
@@ -264,7 +278,11 @@ export class LobbyLogic {
         p.steps -= whole
         const lv = addXp(p.profile, whole * xpPerStep(p.profile, this.others(), now))
         p.dirty = true
-        this.stats(p)
+        // XP flows in every 250 ms, but the HUD only needs a refresh a few times a second.
+        if (lv || now - (p.statsAt || 0) > 600) {
+          p.statsAt = now
+          this.stats(p)
+        }
         this.levelUp(p, lv)
       }
     }
@@ -358,6 +376,8 @@ export class LobbyLogic {
           return this.pack(p, Number(m.i))
         case 'dev':
           return this.dev(p, m)
+        case 'tut':
+          return this.tutorial(p, Number(m.step))
         default:
       }
     } catch (err) {
@@ -400,7 +420,10 @@ export class LobbyLogic {
       this.broadcast('sys', { text: `${pr.name} Won The Race In ${secs} Seconds`, race: true })
       this.send(p.sid, 'raceWin', { secs, bonus })
     }
+    p.racing = null
     this.changed(p, true)
+    // Cashing out ends the run: straight back to the lobby to run again (further).
+    this.setPos(p, lobbySpawn(p.region.world), 'respawn')
   }
 
   respawn(p, stage) {
@@ -420,14 +443,8 @@ export class LobbyLogic {
       this.send(p.sid, 'sfx', { name: 'portal' })
       return this.setPos(p, lobbySpawn(2))
     }
-    const n = Math.floor(Number(to))
-    if (!(n >= 1 && n <= STAGE_COUNT)) return undefined
-    if (n > p.profile.maxStage) return this.toast(p, `Reach Stage ${n} first!`)
-    const denied = stageAccess(p.profile, n)
-    if (denied) return this.toast(p, denied)
-    this.send(p.sid, 'sfx', { name: 'portal' })
-    p.racing = null
-    return this.setPos(p, stageSpawn(n))
+    // No stage teleports: every run starts from the lobby.
+    return undefined
   }
 
   rebirth(p) {
@@ -462,6 +479,15 @@ export class LobbyLogic {
     this.changed(p)
   }
 
+  /** The new-player guide only ever moves forward. */
+  tutorial(p, step) {
+    if (!Number.isFinite(step)) return
+    const next = Math.min(TUT_DONE, Math.max(0, Math.floor(step)))
+    if (next <= (p.profile.tut ?? TUT_DONE)) return
+    p.profile.tut = next
+    this.changed(p)
+  }
+
   dev(p, m) {
     if (!DEV_TOOLS) return
     const pr = p.profile
@@ -473,8 +499,11 @@ export class LobbyLogic {
           this.setPos(p, lobbySpawn(p.region.world))
           break
         }
+        if (stageWorld(n) === 2 && pr.rebirths < WORLD2_REBIRTHS) {
+          this.toast(p, `World 2 needs ${WORLD2_REBIRTHS} Rebirths! (use +Rebirth)`)
+          return
+        }
         if (n > pr.maxStage) pr.maxStage = n
-        if (n > 10 && pr.rebirths < 3) pr.rebirths = 3
         p.region = regionAt(stageSpawn(n).x, stageSpawn(n).z)
         this.setPos(p, stageSpawn(n))
         break

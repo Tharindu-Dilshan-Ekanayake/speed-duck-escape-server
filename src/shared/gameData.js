@@ -103,11 +103,39 @@ export const treadById = (id) => TREADMILLS.find((t) => t.id === id) || null
 /* Stages                                                              */
 /* ------------------------------------------------------------------ */
 
-export const STAGE_COUNT = 20
+/** World 1 = stages 1-15, World 2 = stages 16-25. */
+export const W1_STAGES = 15
+export const STAGE_COUNT = 25
 export const WORLD2_REBIRTHS = 3
+export const worldFirst = (world) => (world === 2 ? W1_STAGES + 1 : 1)
+export const worldLast = (world) => (world === 2 ? STAGE_COUNT : W1_STAGES)
+export const stageWorld = (stage) => (stage > W1_STAGES ? 2 : 1)
 
-/** Wins for stepping on each stage's end pad (before multipliers). Index 0 unused. */
-export const STAGE_WINS = [0, 1, 3, 10, 20, 40, 75, 125, 200, 300, 450, 700, 1000, 1500, 2200, 3200, 4500, 6500, 9000, 12500, 18000]
+/**
+ * Wins for a stage's end pad (before multipliers). Index 0 unused. Claiming a pad ends the
+ * run and sends you back to the lobby, so each value is the reward for the whole run up to
+ * that stage: cash out early for a little, or push on (harder, needs more Speed) for a lot.
+ */
+export const STAGE_WINS = [
+  0,
+  // World 1
+  1, 3, 6, 12, 22, 40, 70, 120, 200, 320, 500, 800, 1250, 2000, 3200,
+  // World 2 (x2.5 already from 3 rebirths)
+  5000, 7500, 11000, 16000, 23000, 33000, 47000, 66000, 92000, 130000,
+]
+
+/**
+ * Level needed to pass each stage's gate (a force field blocks you below it). Rebirth
+ * resets your level, so every rebirth means climbing back up - with bigger multipliers.
+ */
+export const STAGE_LEVEL = [
+  0,
+  // World 1
+  1, 1, 3, 5, 7, 9, 11, 13, 15, 17, 19, 21, 23, 25, 27,
+  // World 2
+  5, 10, 15, 20, 25, 30, 35, 40, 45, 50,
+]
+export const stageLevel = (stage) => STAGE_LEVEL[stage] || 1
 
 export const STAGE_NAMES = [
   '',
@@ -121,6 +149,11 @@ export const STAGE_NAMES = [
   'Sky Bridge',
   'Boulder Canyon',
   'Flooded Bridges',
+  'Log Rollers',
+  'Axe Causeway',
+  'Crumbling Cliffs',
+  'Spinning Lava Wheels',
+  'Great Duck Escape',
   'Crystal Caves',
   'Conveyor Chaos',
   'Pendulum Hall',
@@ -133,14 +166,13 @@ export const STAGE_NAMES = [
   'Golden Temple',
 ]
 
-export const stageWorld = (stage) => (stage > 10 ? 2 : 1)
-
-/** Sum of every pad up to `maxStage` - one full run's worth of wins (pre-multiplier). */
+/** The best single pad you have unlocked - prices for boosts / packs / gifts scale with it. */
 export function runWins(maxStage) {
-  let s = 0
-  for (let i = 1; i <= Math.min(STAGE_COUNT, Math.max(1, maxStage)); i += 1) s += STAGE_WINS[i]
-  return s
+  return STAGE_WINS[Math.min(STAGE_COUNT, Math.max(1, maxStage))]
 }
+
+/** Tutorial steps for brand-new players (profile.tut); TUT_DONE = finished / skipped. */
+export const TUT_DONE = 99
 
 /* ------------------------------------------------------------------ */
 /* Races                                                               */

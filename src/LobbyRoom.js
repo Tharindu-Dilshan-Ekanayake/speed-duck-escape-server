@@ -7,7 +7,8 @@ import { MAX_PLAYERS_PER_LOBBY } from './shared/gameData.js'
 import { LobbyLogic } from './shared/lobbyLogic.js'
 import { migrate, newProfile } from './shared/rules.js'
 
-const TICK_MS = 100
+/** 15 Hz: position snapshots for other players' smooth interpolation. */
+const TICK_MS = 66
 const SAVE_EVERY_MS = 15_000
 
 /** uid -> { room, client } so a second tab/device takes over the session cleanly. */
